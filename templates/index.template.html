@@ -1,0 +1,98 @@
+<html>
+    <head>
+        <title>{%title%} | Huy's Blog</title>
+        <meta charset="utf-8">
+        <meta http-equiv="content-type" content="text/html;"><meta name=viewport content="initial-scale=1.0 maximum-scale=1.0">
+        {%meta%}
+        <link href="https://fonts.googleapis.com/css?family=Inconsolata:400,700&amp;subset=latin-ext,vietnamese" rel="stylesheet">
+        <link href="css/theme.css" rel="stylesheet" type="text/css">
+        <link rel="stylesheet" href="css/highlight/tomorrow-night.css">
+        <link rel="stylesheet" href="css/fontello.css">
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+        <meta name="theme-color" content="#ffffff">
+    </head>
+    <body>
+        <header id="user_top" class="cf ">
+          <figure id="user_logo" class="active"><a href="https://thefullsnack.com">The Full Snack Developer</a></figure>
+          <h2><a href="https://thefullsnack.com">The Full Snack Developer</a></h2>
+          <h4><span class="name_head">by</span> Huy Tran</h4>
+          <h3>Tôi xuất thân con nhà <a href="/posts/sketches">vẽ</a>, nhưng thích đi <a href="https://github.com/huytd">code</a>.<br/>Hiện nay tôi đang làm vị trí kĩ sư mặt tiền cho một startup nhỏ ở thung lũng túi nâng silicon.</h3>
+          <a class="subscribe" href="http://eepurl.com/cN5YDv" rel="noopener noreferrer" target="blank">Theo dõi blog này</a>
+          <a class="subscribe" href="/posts/friend-sites.html">Một số blog hay nên đọc</a>
+          <a class="subscribe" href="https://www.goodreads.com/review/list/53058368?shelf=read">Sách mình đang đọc</a>
+          <div class="searchbox">
+              <div class="search">
+                  <form action="https://www.google.com/search" method="get">
+                      <input type="text" name="q" placeholder="Bạn muốn tìm gì?" />
+                      <input type="hidden" name="as_sitesearch" value="thefullsnack.com">
+                  </form>
+              </div>
+          </div>
+        </header>
+        <div class="container">
+            <div class="main">
+                {%content%}
+            </div>
+
+            <div id="fb-root"></div>
+            <script>(function(d, s, id) {
+            var js, fjs = d.getElementsByTagName(s)[0];
+                          if (d.getElementById(id)) return;
+                          js = d.createElement(s); js.id = id;
+                          js.src = "//connect.facebook.net/en_US/sdk.js#xfbml=1&version=v2.9&appId=462066520669072";
+                          fjs.parentNode.insertBefore(js, fjs);
+                            }(document, 'script', 'facebook-jssdk'));</script>
+
+            <div class="fb-like-box">
+              <div class="fb-page" data-href="https://www.facebook.com/thefullsnackblog" data-width="700" data-small-header="true" data-adapt-container-width="true" data-hide-cover="false" data-show-facepile="true"><blockquote cite="https://www.facebook.com/thefullsnackblog" class="fb-xfbml-parse-ignore"><a href="https://www.facebook.com/thefullsnackblog">The Full Snack</a></blockquote></div>
+              <div class="like-bait"></div>
+            </div>
+        </div>
+	    <div class="footer"> 
+        <p><a href="http://creativecommons.org/licenses/by-nc-nd/4.0/"><img src="https://thefullsnack.com/img/by-nc-nd.png" height="15" /></a></p>
+            <p>Created with <a href="http://github.com/huytd/azeroth-js">azeroth.js</a></p>
+            <div class="social">
+                <a target="_blank" href="http://facebook.com/thefullsnackblog"><i class="icon-facebook-squared"></i></a>
+                <a target="_blank" href="http://twitter.com/huydotnet"><i class="icon-twitter-squared"></i></a>
+                <a target="_blank" href="http://github.com/huytd"><i class="icon-github-squared"></i></a>
+                <a target="_blank" href="https://thefullsnack.com/en"><i class="icon-star"></i></a>
+            </div>
+        </div>
+        <script>
+          // Tracking
+          let serialize = function(obj) {
+            var str = [];
+            for(var p in obj)
+              if (obj.hasOwnProperty(p)) {
+                str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
+              }
+            return str.join("&");
+          };
+          let store = localStorage;
+          if (store && btoa) {
+            let tracker = JSON.parse(store.getItem('huyBlogTracker') || "{}");
+            let today = btoa((new Date()).toDateString());
+            let currentURL = window.location.href;
+            let urlTrackingKey = btoa(currentURL);
+            if (!tracker[urlTrackingKey] || tracker[urlTrackingKey] !== today) {
+              tracker[urlTrackingKey] = today;
+              // Do tracking here
+              let trackData = {
+                userAgent: navigator.userAgent,
+                language: navigator.language,
+                url: currentURL,
+                refer: document.referrer
+              };
+              let trackParams = serialize(trackData);
+              let trackURL = "https://us-central1-huys-blog-comment.cloudfunctions.net/sayHello?" + trackParams;
+              fetch(trackURL).then(function(response) { });
+            }
+            store.setItem('huyBlogTracker', JSON.stringify(tracker));
+          }
+        </script>
+    </body>
+</html>

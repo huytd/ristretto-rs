@@ -1,0 +1,57 @@
+p {
+  text-align: justify;
+}
+
+table {
+  border: none;
+  background: none;
+}
+
+td, td, tr, thead, tbody {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+th {
+  display: none;
+}
+
+h1:before, h2:before, h3:before, h4:before, h5:before, h6:before {
+  color: #CCC;
+  margin-left: -20px;
+  margin-right: 10px;
+  content: "#";
+}
+
+hr {
+  border: 0; height: 1px; 
+  background-image: none;
+  background-color: #EEE !important;
+}
+
+table h2, table h1 {
+  margin: 0 !important;
+}
+
+table h1::before, table h2::before {
+  display: none;
+  counter-increment: none;
+}
+
+.main > h2 {
+  display: inline-block;
+  clear: both;
+  border-bottom: 2px solid #333;
+  padding-bottom: 0;
+}
+
+.main > h2 + p {
+  margin-top: 0;
+}
+
+@media print {
+  html, body, table {
+    font-size: 14px;
+  }
+}
