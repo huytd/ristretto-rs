@@ -1,9 +1,9 @@
 ---
 title: Lập trình và Toán học
 published: true
-date: 10-10-2017 15:43:23
+date: 2017-10-10 10:03:21
 tags: opinion, random, math, algorithm
-description: 
+description: Tui và Toán đã từng là hai kẻ thù không đội trời chung trong suốt hơn mười lăm năm ròng rã. Ngay từ ánh nhìn đầu tiên đã ghét nhau rồi...
 image:
 ---
 ## Phần 1: Tự truyện 

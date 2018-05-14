@@ -7,3 +7,6 @@ authors = ["Huy <huy@loopcommerce.com>"]
 comrak = "0.2"
 regex = "1.0.0"
 rss = "1.5.0"
+time = "0.1.40"
+dotenv = "0.11.0"
+dotenv_codegen = "0.11.0"

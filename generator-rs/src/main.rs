@@ -1,9 +1,14 @@
 extern crate comrak;
 extern crate regex;
 extern crate rss;
+extern crate time;
+extern crate dotenv;
+#[macro_use]
+extern crate dotenv_codegen;
 
-use comrak::{markdown_to_html, ComrakOptions};
+use dotenv::dotenv;
 use std::env;
+use comrak::{markdown_to_html, ComrakOptions};
 use std::fs;
 use std::io::prelude::*;
 use std::io::{BufRead, BufReader};
@@ -13,8 +18,12 @@ use std::collections::HashMap;
 use regex::Regex;
 use rss::ChannelBuilder;
 
-// TODO: put this in a config file
-const DOMAIN_NAME: &str = "https://thefullsnack.com/";
+const DOMAIN_NAME: &str = dotenv!("DOMAIN_NAME");
+const RSS_TITLE: &str = dotenv!("RSS_TITLE");
+const RSS_DESCRIPTION: &str = dotenv!("RSS_DESCRIPTION");
+const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+const DISPLAY_TIME_FORMAT: &str = "%Y-%d-%m";
+const RFC2822_TIME_FORMAT: &str = "%a, %d %b %Y %T %z";
 
 #[derive(Debug)]
 struct Article {
@@ -151,9 +160,10 @@ fn generate_index_page(posts: &Vec<Metadata>) {
     if let Ok(template) = load_template("index") {
         let html: Vec<String> = posts.into_iter().map(|p| {
             let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
-            let post_date: Vec<&str> = p.date.split(" ").collect();
+            let post_date = time::strptime(&p.date, TIME_FORMAT).unwrap();
+            let post_date_text = time::strftime(DISPLAY_TIME_FORMAT, &post_date).unwrap_or(format!(""));
             let tag_list = &p.tags.join(", ");
-            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}<br/><a href='{}posts/{}'>{}</a></div>", post_date[0], tag_list, DOMAIN_NAME, file_name, p.title)
+            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}<br/><a href='{}posts/{}'>{}</a></div>", post_date_text, tag_list, DOMAIN_NAME, file_name, p.title)
         }).collect();
         let markdown = html.join("\n");
         let post = Metadata {
@@ -196,20 +206,26 @@ fn generate_tags_page(tags: &HashMap<String, Vec<Article>>) {
 
 fn generate_rss_feed(posts: &Vec<Metadata>) {
     let mut channel = ChannelBuilder::default()
-        .title("The Full Snack")
-        .link("https://thefullsnack.com")
-        .description("The Full Snack Blog")
+        .title(RSS_TITLE)
+        .link(DOMAIN_NAME)
+        .description(RSS_DESCRIPTION)
         .build()
         .unwrap();
 
     let mut items: Vec<rss::Item> = vec![];
     for post in posts {
         let file_name = post.output_file.file_name().unwrap().to_str().unwrap();
+        let post_date = time::strptime(&post.date, TIME_FORMAT).unwrap();
+        let post_date_text = time::strftime(RFC2822_TIME_FORMAT, &post_date).unwrap_or(format!(""));
         let mut item = rss::Item::default();
-        item.set_guid(rss::Guid::default());
+        let link = format!("{}{}", DOMAIN_NAME, file_name);
+        let mut guid = rss::Guid::default();
+        guid.set_value(link.clone());
         item.set_title(format!("{}", &post.title));
-        item.set_link(format!("{}{}", DOMAIN_NAME, file_name));
+        item.set_guid(guid);
+        item.set_link(link.clone());
         item.set_description(format!("{:?}", &post.description));
+        item.set_pub_date(post_date_text);
         items.push(item);
     }
     channel.set_items(items);
