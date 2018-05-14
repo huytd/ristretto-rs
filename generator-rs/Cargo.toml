@@ -6,3 +6,4 @@ authors = ["Huy <huy@loopcommerce.com>"]
 [dependencies]
 comrak = "0.2"
 regex = "1.0.0"
+rss = "1.5.0"

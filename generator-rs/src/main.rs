@@ -1,5 +1,6 @@
 extern crate comrak;
 extern crate regex;
+extern crate rss;
 
 use comrak::{markdown_to_html, ComrakOptions};
 use std::env;
@@ -10,6 +11,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use regex::Regex;
+use rss::ChannelBuilder;
 
 // TODO: put this in a config file
 const DOMAIN_NAME: &str = "https://thefullsnack.com/";
@@ -192,6 +194,30 @@ fn generate_tags_page(tags: &HashMap<String, Vec<Article>>) {
     }
 }
 
+fn generate_rss_feed(posts: &Vec<Metadata>) {
+    let mut channel = ChannelBuilder::default()
+        .title("The Full Snack")
+        .link("https://thefullsnack.com")
+        .description("The Full Snack Blog")
+        .build()
+        .unwrap();
+
+    let mut items: Vec<rss::Item> = vec![];
+    for post in posts {
+        let file_name = post.output_file.file_name().unwrap().to_str().unwrap();
+        let mut item = rss::Item::default();
+        item.set_guid(rss::Guid::default());
+        item.set_title(format!("{}", &post.title));
+        item.set_link(format!("{}{}", DOMAIN_NAME, file_name));
+        item.set_description(format!("{:?}", &post.description));
+        items.push(item);
+    }
+    channel.set_items(items);
+
+    let mut output_file = File::create("./rss.xml").unwrap();
+    output_file.write_all(channel.to_string().as_bytes());
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut folder = ".";
@@ -239,12 +265,12 @@ fn main() {
                 None
             });
 
-        // TODO: Generate index page
         println!("Total {} posts", posts.len());
         generate_index_page(&posts);
 
-        // TODO: Generate tags pages
         println!("Tags: {:?}", shared.tags);
         generate_tags_page(&shared.tags);
+
+        generate_rss_feed(&posts);
     }
 }
