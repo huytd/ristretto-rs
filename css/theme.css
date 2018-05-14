@@ -582,6 +582,7 @@ header#user_top {
     text-align: center;
     background: #fafafa;
     border-bottom: 1px solid #f8f8f8;
+    margin-bottom: 30px;
 }
 
 header#user_top h2 {
@@ -1083,16 +1084,23 @@ p.special word wise {
 }
 
 .searchbox {
-    width: 500px;
-    margin: 30px auto 10px auto;
+    width: 700px;
+    position: absolute;
+    left: 50%; bottom: -15px;
+    margin-left: -350px;
+}
+
+.searchbox form {
+    margin: 0;
 }
 
 .searchbox input[type=text] {
-    padding: 8px;
+    padding: 12px;
     width: 100%;
     font-size: 0.9em;
     border: 1px solid #CCC;
     background: #FFF;
+    color: #333;
 }
 
 .bigquote {
@@ -1117,4 +1125,48 @@ p.special word wise {
   font-size: 0.7em;
   opacity: 0.5;
   text-align: right;
+}
+
+.home-date-indicator {
+    color: #888;
+    margin-right: 10px;
+}
+
+.home-list-item {
+    margin-bottom: 12px;
+    font-size: 0.8em;
+    position: relative;
+}
+
+.home-list-item a {
+    font-size: 1.3em;
+}
+
+.home-counter {
+    font-size: 1.1em;
+}
+
+.header-top {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 20px;
+    background: #222;
+    color: #888;
+    padding: 10px;
+    text-align: left;
+}
+
+.header-top a {
+    color: #EEE;
+    text-decoration: none;
+}
+
+.header-top a:hover {
+    color: #FFF;
+}
+
+@media only screen and (max-width: 768px) {
+    .header-top, .searchbox {
+        display: none;
+    }
 }

@@ -1,0 +1,34 @@
+.em.em-think-old {
+    width: 1.3em; height: 1.3em;
+    background: url(../img/sheet_thinking.png);
+    background-size: 200%;
+    background-position: 0% 0%;
+}
+
+.em.em-think-mid {
+    width: 1.3em; height: 1.3em;
+    background: url(../img/sheet_thinking.png);
+    background-size: 200%;
+    background-position: 100% 0%;
+}
+
+.em.em-think-hard {
+    width: 1.3em; height: 1.3em;
+    background: url(../img/sheet_thinking.png);
+    background-size: 200%;
+    background-position: 0% 50%;
+}
+
+.em.em-think-hopeful {
+    width: 1.3em; height: 1.3em;
+    background: url(../img/sheet_thinking.png);
+    background-size: 200%;
+    background-position: 100% 50%;
+}
+
+.em.em-think-cry {
+    width: 1.3em; height: 1.3em;
+    background: url(../img/sheet_thinking.png);
+    background-size: 200%;
+    background-position: 0% 100%;
+}

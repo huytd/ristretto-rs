@@ -11,8 +11,17 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use regex::Regex;
 
+// TODO: put this in a config file
+const DOMAIN_NAME: &str = "https://thefullsnack.com/";
+
+#[derive(Debug)]
+struct Article {
+    title: String,
+    url: String
+}
+
 struct Shared {
-    tags: HashMap<String, Vec<String>>
+    tags: HashMap<String, Vec<Article>>
 }
 
 struct Metadata {
@@ -27,40 +36,62 @@ struct Metadata {
 }
 
 fn load_template(folder: &str) -> std::io::Result<String> {
-    let mut f_template = File::open(format!("./templates/{}.template.html", folder))?;
+    let template = if folder.starts_with(".") {
+        "posts"
+    } else {
+        folder
+    };
+    let mut f_template = File::open(format!("./templates/{}.template.html", template))?;
     let mut template_source = String::new();
     let _result = f_template.read_to_string(&mut template_source)?;
     Ok(template_source)
 }
 
-fn for_each_extension<F: Fn(&mut Shared, &Path)>(extension: &str, folder: &str, shared: &mut Shared, func: F) {
+fn for_each_extension<F: Fn(&mut Shared, &Path) -> Option<Metadata>>(extension: &str, folder: &str, shared: &mut Shared, func: F) -> Vec<Metadata> {
+    let mut posts: Vec<Metadata> = vec![];
     let paths = fs::read_dir(folder).unwrap();
     for entry in paths {
         let entry = entry.unwrap().path();
         let path = entry.as_path();
         if let Some(ext) = path.extension() {
             if ext == extension {
-                func(shared, path);
+                if let Some(post) = func(shared, path) {
+                    posts.push(post);
+                }
             }
         }
     }
+    posts
 }
 
-fn apply_template(template: &str, post: &Metadata) -> String {
-    let parsed = markdown_to_html(&post.markdown, &ComrakOptions::default());
+fn generate_tags(text: &str, tags: &Vec<String>) -> String {
+    let output: Vec<String> = tags.into_iter().map(|t| format!("<a class='topic-tag' href='{}tags/{}.html'>{}</a>", DOMAIN_NAME, t, t)).collect();
+    let inner_html = output.as_slice().join("");
+    format!("<div class='other-tags'><b>{}Tags:</b> {}</div>", text, inner_html)
+}
+
+fn apply_template(template: &str, post: &Metadata, tag_text: &str) -> String {
+    let mut options = ComrakOptions::default();
+    options.ext_strikethrough = true;
+    options.ext_table = true;
+    options.ext_autolink = true;
+    options.ext_header_ids = Some("".to_string());
+    options.ext_footnotes = true;
+    let parsed = markdown_to_html(&post.markdown, &options);
     let file_name = post.output_file.file_name().unwrap().to_str().unwrap();
     let html =
         &template
         .replace("{%content%}", &parsed)
         .replace("{%title%}", &post.title)
-        .replace("{%meta%}", "")
+        .replace("{%meta%}", "") // TODO: generate metadata
         .replace("{%hash%}", "")
+        .replace("{%tags%}", &generate_tags(tag_text, &post.tags))
         .replace("{%postslug%}", &file_name.replace(".html", ""))
-        .replace("{%posturl%}", &format!("https://thefullsnack.com/posts/{}", file_name));
+        .replace("{%posturl%}", &format!("{}posts/{}", DOMAIN_NAME, file_name));
     format!("{}", html)
 }
 
-fn save_as_html(html: &str, output_path: PathBuf) -> std::io::Result<bool> {
+fn save_as_html(html: &str, output_path: &PathBuf) -> std::io::Result<bool> {
     let mut output_file = File::create(output_path).unwrap();
     output_file.write_all(html.as_bytes())?;
     Ok(true)
@@ -114,46 +145,106 @@ fn parse_metadata(path: &Path) -> Metadata {
     metadata
 }
 
+fn generate_index_page(posts: &Vec<Metadata>) {
+    if let Ok(template) = load_template("index") {
+        let html: Vec<String> = posts.into_iter().map(|p| {
+            let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
+            let post_date: Vec<&str> = p.date.split(" ").collect();
+            let tag_list = &p.tags.join(", ");
+            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}<br/><a href='{}posts/{}'>{}</a></div>", post_date[0], tag_list, DOMAIN_NAME, file_name, p.title)
+        }).collect();
+        let markdown = html.join("\n");
+        let post = Metadata {
+            title: "Index".to_string(),
+            published: true,
+            date: "".to_string(),
+            description: "".to_string(),
+            image: "".to_string(),
+            tags: vec![],
+            markdown: markdown,
+            output_file: PathBuf::from("./index.html")
+        };
+        let output_html = apply_template(&template, &post, "");
+        let _ = save_as_html(&output_html, &PathBuf::from("./index.html"));
+    }
+}
+
+fn generate_tags_page(tags: &HashMap<String, Vec<Article>>) {
+    if let Ok(template) = load_template("tags") {
+        for (key, value) in tags.into_iter() {
+            println!("{} - {:?}", key, value);
+            let post_list: Vec<String> = value.into_iter().map(|a| format!("- [{}]({}{})", a.title, DOMAIN_NAME, a.url)).collect();
+            let markdown = post_list.join("\n");
+            let tags_except_key: Vec<String> = tags.keys().into_iter().filter(|k| *k != key).map(|k| format!("{}", k)).collect();
+            let post = Metadata {
+                title: format!("{}", &key),
+                published: true,
+                date: "".to_string(),
+                description: "".to_string(),
+                image: "".to_string(),
+                tags: Vec::from(tags_except_key),
+                markdown: markdown,
+                output_file: PathBuf::from(&format!("./tags/{}.html", &key))
+            };
+            let output_html = apply_template(&template, &post, "Other ");
+            let _ = save_as_html(&output_html, &post.output_file);
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let folder = &args[1];
+    let mut folder = ".";
+    if args.len() > 1 {
+        folder = &args[1];
+    }
     let emoji_regex: Regex = Regex::new(r#" :\b([a-z\-]+)\b:"#).unwrap();
-    let ref_regex: Regex = Regex::new(r#"<ref>([0-9]+)</ref>"#).unwrap();
-    let cite_regex: Regex = Regex::new(r#"<cite id="([0-9]+)">(.*)</cite>"#).unwrap();
 
-    let template = load_template(folder).unwrap();
+    // TODO: Default template should come from config file as well
+    if let Ok(template) = load_template(folder) {
+        let mut shared = Shared { tags: HashMap::new() };
 
-    let mut shared = Shared { tags: HashMap::new() };
+        let posts =
+            for_each_extension("md", folder, &mut shared, move |shared, path| {
+                let mut post = parse_metadata(path);
+                if post.published {
+                    println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
+                    // Parse tags
+                    for tag in &post.tags {
+                        let find_tag = format!("{}", tag);
+                        if !shared.tags.contains_key(&find_tag) {
+                            shared.tags.insert(format!("{}", tag), vec![]);
+                        }
+                        let mut tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
+                        tag_posts.push(
+                            Article {
+                                title: format!("{}", &post.title),
+                                url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
+                            }
+                        );
+                    }
+                    // Parse cover
+                    post.markdown = custom_parser(&post.markdown, |src| src
+                                                  .replace("<cover>", "<div class='cover' style='background-image: url(")
+                                                  .replace("</cover>", ")'></div><div class='cover-holder'></div>"));
+                    // Parse Emoji
+                    post.markdown = custom_parser(&post.markdown, |src| emoji_regex.replace_all(src, " <i class='em em-$1'></i>").into_owned());
+                    // Parse math
+                    post.markdown = custom_parser(&post.markdown, |src| src.replace("<math>", "<pre class='math'>$$").replace("</math>", "$$</pre>"));
 
-    for_each_extension("md", folder, &mut shared, move |shared, path| {
-        let mut post = parse_metadata(path);
-        if post.published {
-            println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
-            // Parse tags
-            for tag in &post.tags {
-                let find_tag = format!("{}", tag);
-                if !shared.tags.contains_key(&find_tag) {
-                    shared.tags.insert(format!("{}", tag), vec![]);
+                    let output_html = apply_template(&template, &post, "");
+                    let _save_result = save_as_html(&output_html, &post.output_file);
+                    return Some(post);
                 }
-                let mut tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
-                tag_posts.push(format!("{}", post.output_file.file_name().unwrap().to_str().unwrap()));
-            }
-            // Parse cover
-            post.markdown = custom_parser(&post.markdown, |src| src
-                                           .replace("<cover>", "<div class='cover' style='background-image: url(")
-                                           .replace("</cover>", ")'></div><div class='cover-holder'></div>"));
-            // Parse Emoji
-            post.markdown = custom_parser(&post.markdown, |src| emoji_regex.replace_all(src, " <i class='em em-$1'></i>").into_owned());
-            // Parse math
-            post.markdown = custom_parser(&post.markdown, |src| src.replace("<math>", "<pre class='math'>$$").replace("</math>", "$$</pre>"));
-            // Parse refs
-            post.markdown = custom_parser(&post.markdown, |src| ref_regex.replace_all(src, r#"<sup><a id='reference-link-$1' href='#reference-area-$1'>\[$1\]</a></sup>"#).into_owned());
-            post.markdown = custom_parser(&post.markdown, |src| cite_regex.replace_all(src, r#"<div id='reference-area-$1'>\[$1\] $2 <sup alt='Quay trở lên trên'><a href='#reference-link-$1'>↑ return</a></sup></div>"#).into_owned());
+                None
+            });
 
-            let output_html = apply_template(&template, &post);
-            let _save_result = save_as_html(&output_html, post.output_file);
-        }
-    });
+        // TODO: Generate index page
+        println!("Total {} posts", posts.len());
+        generate_index_page(&posts);
 
-    println!("Tags: {:?}", shared.tags);
+        // TODO: Generate tags pages
+        println!("Tags: {:?}", shared.tags);
+        generate_tags_page(&shared.tags);
+    }
 }

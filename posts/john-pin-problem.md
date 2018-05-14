@@ -14,9 +14,9 @@ Bài toán được đăng trong cuốn tạp chí như sau:
 
 <div class="box-white" style="padding: 10px;">
 Một vị giáo sư toán-tin rất cẩn thận nhưng đãng trí. <br/><br/>
-Cách đây vài hôm ngân hàng gửi ông một bức thư thông báo mật khẩu của thẻ tín dụng. Mật khẩu là một số có 6 chữ số `$abcdef$`. <br/><br/>
+Cách đây vài hôm ngân hàng gửi ông một bức thư thông báo mật khẩu của thẻ tín dụng. Mật khẩu là một số có 6 chữ số $abcdef$. <br/><br/>
 Ông không muốn giữ lại bức thư vì sợ nó có thể lọt vào tay kẻ gian. <br/><br/> 
-Vì vậy ông dùng một chiếc máy tính cầm tay đơn giản (gồm 4 phép tính `$+, -, \times, \div$` và `10` chữ số) để tính tỉ số `$abc \div def$`. Ông nhận được kết quả gần đúng là `0.195323246` và ghi nó lên một tờ giấy. <br/><br/>
+Vì vậy ông dùng một chiếc máy tính cầm tay đơn giản (gồm 4 phép tính $+, -, \times, \div$ và `10` chữ số) để tính tỉ số $abc \div def$. Ông nhận được kết quả gần đúng là `0.195323246` và ghi nó lên một tờ giấy. <br/><br/>
 Làm thế nào để vị giáo sư có thể tìm lại được mật khẩu trong thời gian ngắn nhất nếu ông chỉ có trong tay chiếc máy tính cầm tay đơn giản đó, và mật khẩu là gì?
 </div>
 
@@ -78,7 +78,7 @@ a_0 + \frac{\displaystyle 1}{\displaystyle a_1
 
 Trong đó $a_0 \in \mathbb{Z}$ và $a_1, \cdots, a_n$ là các số nguyên dương, $a_n > 1$.
 
-Liên phân số trên được kí hiệu là `$[a_0 ; a_1, a_2, \cdots, a_{n-1}, a_n]$` hoặc `$[a_0 ; a_1, a_2, \cdots, a_{n-1}, a_n - 1, 1]$` trong đó `$n$` chính là độ dài của liên phân số.
+Liên phân số trên được kí hiệu là $[a_0 ; a_1, a_2, \cdots, a_{n-1}, a_n]$ hoặc $[a_0 ; a_1, a_2, \cdots, a_{n-1}, a_n - 1, 1]$ trong đó $n$ chính là độ dài của liên phân số.
 
 #### Biểu diễn số hữu tỉ bằng liên phân số 
 
