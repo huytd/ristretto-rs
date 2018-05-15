@@ -1,7 +1,7 @@
 [package]
 name = "generator-rs"
 version = "0.1.0"
-authors = ["Huy <huy@loopcommerce.com>"]
+authors = ["Huy <kingbazoka@gmail.com>"]
 
 [dependencies]
 comrak = "0.2"
