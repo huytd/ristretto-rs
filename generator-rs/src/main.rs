@@ -71,7 +71,7 @@ fn for_each_extension<F: Fn(&mut Shared, &Path) -> Option<Metadata>>(extension: 
 
 fn generate_tags(text: &str, tags: &Vec<String>) -> String {
     //dotenv().ok();
-    let output: Vec<String> = tags.into_iter().map(|t| format!("<a class='topic-tag' href='{}tags/{}.html'>{}</a>", env::var("DOMAIN_NAME").unwrap(), t, t)).collect();
+    let output: Vec<String> = tags.into_iter().map(|t| format!("<a class='topic-tag' href='/tags/{}.html'>{}</a>", t, t)).collect();
     let inner_html = output.as_slice().join("");
     format!("<div class='other-tags'><b>{}Tags:</b> {}</div>", text, inner_html)
 }
@@ -94,7 +94,7 @@ fn apply_template(template: &str, post: &Metadata, tag_text: &str) -> String {
         .replace("{%hash%}", "")
         .replace("{%tags%}", &generate_tags(tag_text, &post.tags))
         .replace("{%postslug%}", &file_name.replace(".html", ""))
-        .replace("{%posturl%}", &format!("{}posts/{}", env::var("DOMAIN_NAME").unwrap(), file_name));
+        .replace("{%posturl%}", &format!("{}/posts/{}", env::var("DOMAIN_NAME").unwrap(), file_name));
     format!("{}", html)
 }
 
@@ -154,16 +154,15 @@ fn parse_metadata(path: &Path) -> Metadata {
 
 fn generate_index_page(posts: &Vec<Metadata>) {
     //dotenv().ok();
-    let date_format = env::var("DATE_FORMAT").unwrap_or("What is date format".to_string());
-    let domain_name = env::var("DOMAIN_NAME").unwrap_or("What is domain name".to_string());
-    println!("{} {}", &date_format, &domain_name);
+    let date_format = env::var("DATE_FORMAT").unwrap();
+    let domain_name = env::var("DOMAIN_NAME").unwrap();
     if let Ok(template) = load_template("index") {
         let html: Vec<String> = posts.into_iter().map(|p| {
             let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
             let post_date = time::strptime(&p.date, TIME_FORMAT).unwrap();
             let post_date_text = time::strftime(&date_format, &post_date).unwrap_or(format!(""));
             let tag_list = &p.tags.join(", ");
-            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}<br/><a href='{}posts/{}'>{}</a></div>", post_date_text, tag_list, &domain_name, file_name, p.title)
+            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}<br/><a href='/posts/{}'>{}</a></div>", post_date_text, tag_list, file_name, p.title)
         }).collect();
         let markdown = html.join("\n");
         let post = Metadata {
@@ -186,7 +185,7 @@ fn generate_tags_page(tags: &HashMap<String, Vec<Article>>) {
     if let Ok(template) = load_template("tags") {
         for (key, value) in tags.into_iter() {
             println!("{} - {:?}", key, value);
-            let post_list: Vec<String> = value.into_iter().map(|a| format!("- [{}]({}{})", a.title, env::var("DOMAIN_NAME").unwrap(), a.url)).collect();
+            let post_list: Vec<String> = value.into_iter().map(|a| format!("- [{}](/posts/{})", a.title, a.url)).collect();
             let markdown = post_list.join("\n");
             let tags_except_key: Vec<String> = tags.keys().into_iter().filter(|k| *k != key).map(|k| format!("{}", k)).collect();
             let post = Metadata {
@@ -220,7 +219,7 @@ fn generate_rss_feed(posts: &Vec<Metadata>) {
         let post_date = time::strptime(&post.date, TIME_FORMAT).unwrap();
         let post_date_text = time::strftime(RFC2822_TIME_FORMAT, &post_date).unwrap_or(format!(""));
         let mut item = rss::Item::default();
-        let link = format!("{}{}", env::var("DOMAIN_NAME").unwrap(), file_name);
+        let link = format!("{}/posts/{}", env::var("DOMAIN_NAME").unwrap(), file_name);
         let mut guid = rss::Guid::default();
         guid.set_value(link.clone());
         item.set_title(format!("{}", &post.title));
