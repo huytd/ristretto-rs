@@ -31,7 +31,7 @@ struct Shared {
 
 struct Metadata {
     title: String,
-    published: bool,
+    published: String,
     date: String,
     description: String,
     image: String,
@@ -111,7 +111,7 @@ fn custom_parser<F: Fn(&str) -> String>(markdown: &str, func: F) -> String {
 fn parse_metadata(path: &Path) -> Metadata {
     let mut metadata = Metadata {
         title: format!(""),
-        published: false,
+        published: format!("false"),
         date: format!(""),
         description: format!(""),
         image: format!(""),
@@ -132,7 +132,7 @@ fn parse_metadata(path: &Path) -> Metadata {
                 metadata.title = line.replace("title: ", "");
             }
             else if line.starts_with("published: ") {
-                metadata.published = line.replace("published: ", "").eq("true");
+                metadata.published = line.replace("published: ", "");
             }
             else if line.starts_with("date: ") {
                 metadata.date = line.replace("date: ", "");
@@ -162,12 +162,17 @@ fn generate_index_page(posts: &Vec<Metadata>) {
             let post_date = time::strptime(&p.date, TIME_FORMAT).unwrap();
             let post_date_text = time::strftime(&date_format, &post_date).unwrap_or(format!(""));
             let tag_list = &p.tags.join(", ");
-            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}<br/><a href='/posts/{}'>{}</a></div>", post_date_text, tag_list, file_name, p.title)
+            let guest_tag = if p.published.eq("guest") {
+                "<span class='guest-post'>Guest Post</span>"
+            } else {
+                ""
+            };
+            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}{}<br/><a href='/posts/{}'>{}</a></div>", post_date_text, guest_tag, tag_list, file_name, p.title)
         }).collect();
         let markdown = html.join("\n");
         let post = Metadata {
             title: "Index".to_string(),
-            published: true,
+            published: format!("true"),
             date: "".to_string(),
             description: "".to_string(),
             image: "".to_string(),
@@ -190,7 +195,7 @@ fn generate_tags_page(tags: &HashMap<String, Vec<Article>>) {
             let tags_except_key: Vec<String> = tags.keys().into_iter().filter(|k| *k != key).map(|k| format!("{}", k)).collect();
             let post = Metadata {
                 title: format!("{}", &key),
-                published: true,
+                published: format!("true"),
                 date: "".to_string(),
                 description: "".to_string(),
                 image: "".to_string(),
@@ -252,7 +257,7 @@ fn main() {
         let mut posts =
             for_each_extension("md", folder, &mut shared, move |shared, path| {
                 let mut post = parse_metadata(path);
-                if post.published {
+                if post.published.eq("true") || post.published.eq("guest") {
                     println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
                     // Parse tags
                     for tag in &post.tags {

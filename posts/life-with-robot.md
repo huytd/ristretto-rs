@@ -1,6 +1,6 @@
 ---
 title: Lái xe với robot
-published: true
+published: guest
 date: 2018-05-12 12:53:20
 tags: random
 description: Con người sống chung với robot y như trong phim khoa học viễn tưởng...
