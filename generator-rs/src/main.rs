@@ -40,6 +40,14 @@ struct Metadata {
     output_file: PathBuf
 }
 
+fn post_can_be_parsed(status: &str) -> bool {
+    status.eq("true") || status.eq("guest") || status.eq("private")
+}
+
+fn post_can_be_published(status: &str) -> bool {
+    status.eq("true") || status.eq("guest")
+}
+
 fn load_template(folder: &str) -> std::io::Result<String> {
     let template = if folder.starts_with(".") {
         "posts"
@@ -257,21 +265,23 @@ fn main() {
         let mut posts =
             for_each_extension("md", folder, &mut shared, move |shared, path| {
                 let mut post = parse_metadata(path);
-                if post.published.eq("true") || post.published.eq("guest") {
+                if post_can_be_parsed(&post.published) {
                     println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
                     // Parse tags
                     for tag in &post.tags {
-                        let find_tag = format!("{}", tag);
-                        if !shared.tags.contains_key(&find_tag) {
-                            shared.tags.insert(format!("{}", tag), vec![]);
-                        }
-                        let mut tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
-                        tag_posts.push(
-                            Article {
-                                title: format!("{}", &post.title),
-                                url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
+                        if post_can_be_published(&post.published) {
+                            let find_tag = format!("{}", tag);
+                            if !shared.tags.contains_key(&find_tag) {
+                                shared.tags.insert(format!("{}", tag), vec![]);
                             }
-                        );
+                            let mut tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
+                            tag_posts.push(
+                                Article {
+                                    title: format!("{}", &post.title),
+                                    url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
+                                }
+                            );
+                        }
                     }
                     // Parse cover
                     post.markdown = custom_parser(&post.markdown, |src| src
@@ -284,7 +294,11 @@ fn main() {
 
                     let output_html = apply_template(&template, &post, "");
                     let _save_result = save_as_html(&output_html, &post.output_file);
-                    return Some(post);
+                    if post_can_be_published(&post.published) {
+                        return Some(post);
+                    } else {
+                        return None;
+                    }
                 }
                 None
             });
