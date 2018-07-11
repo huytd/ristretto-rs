@@ -19,12 +19,13 @@ use rss::ChannelBuilder;
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 const RFC2822_TIME_FORMAT: &str = "%a, %d %b %Y %T %z";
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 struct Article {
     title: String,
     url: String
 }
 
+#[derive(Debug)]
 struct Shared {
     tags: HashMap<String, Vec<Article>>
 }
@@ -84,7 +85,26 @@ fn generate_tags(text: &str, tags: &Vec<String>) -> String {
     format!("<div class='other-tags'><b>{}Tags:</b> {}</div>", text, inner_html)
 }
 
-fn apply_template(template: &str, post: &Metadata, tag_text: &str) -> String {
+fn generate_related_post(shared: Option<&Shared>, tags: &Vec<String>, current: String) -> String {
+    let mut posts: Vec<Article> = vec![];
+    if let Some(shared) = shared {
+        for tag in tags {
+            if let Some(posts_in_tag) = shared.tags.get(tag) {
+                posts.extend(posts_in_tag.iter().cloned());
+            }
+        }
+    }
+    posts.dedup();
+    if let Some(index) = (&posts).into_iter().position(|x| x.title == current) {
+        posts.remove(index);
+    }
+    let total = posts.len();
+    let limit = if total < 5 { total } else { 5 };
+    let output: Vec<String> = posts.into_iter().map(|t| format!("<li><a class='related-post' href='/posts/{}'>{}</a></li>", t.url, t.title)).collect();
+    format!("<ul class='related-posts-list'>{}</ul>", (&output[..limit]).join(""))
+}
+
+fn apply_template(template: &str, post: &Metadata, tag_text: &str, related_posts: Option<&Shared>) -> String {
     //dotenv().ok();
     let mut options = ComrakOptions::default();
     options.ext_strikethrough = true;
@@ -101,6 +121,7 @@ fn apply_template(template: &str, post: &Metadata, tag_text: &str) -> String {
         .replace("{%meta%}", "") // TODO: generate metadata
         .replace("{%hash%}", "")
         .replace("{%tags%}", &generate_tags(tag_text, &post.tags))
+        .replace("{%related%}", &generate_related_post(related_posts, &post.tags, (&post.title).to_string()))
         .replace("{%postslug%}", &file_name.replace(".html", ""))
         .replace("{%posturl%}", &format!("{}/posts/{}", env::var("DOMAIN_NAME").unwrap(), file_name));
     format!("{}", html)
@@ -188,7 +209,7 @@ fn generate_index_page(posts: &Vec<Metadata>) {
             markdown: markdown,
             output_file: PathBuf::from("./index.html")
         };
-        let output_html = apply_template(&template, &post, "");
+        let output_html = apply_template(&template, &post, "", None);
         let _ = save_as_html(&output_html, &PathBuf::from("./index.html"));
     }
 }
@@ -211,7 +232,7 @@ fn generate_tags_page(tags: &HashMap<String, Vec<Article>>) {
                 markdown: markdown,
                 output_file: PathBuf::from(&format!("./tags/{}.html", &key))
             };
-            let output_html = apply_template(&template, &post, "Other ");
+            let output_html = apply_template(&template, &post, "Other ", None);
             let _ = save_as_html(&output_html, &post.output_file);
         }
     }
@@ -262,27 +283,36 @@ fn main() {
     if let Ok(template) = load_template(folder) {
         let mut shared = Shared { tags: HashMap::new() };
 
+        let _ = for_each_extension("md", folder, &mut shared, move |shared, path| {
+            let mut post = parse_metadata(path);
+            if post_can_be_parsed(&post.published) {
+                println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
+                // Parse tags
+                for tag in &post.tags {
+                    if post_can_be_published(&post.published) {
+                        let find_tag = format!("{}", tag);
+                        if !shared.tags.contains_key(&find_tag) {
+                            shared.tags.insert(format!("{}", tag), vec![]);
+                        }
+                        let tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
+                        tag_posts.push(
+                            Article {
+                                title: format!("{}", &post.title),
+                                url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
+                            }
+                        );
+                    }
+                }
+            }
+            None
+        });
+
+
         let mut posts =
             for_each_extension("md", folder, &mut shared, move |shared, path| {
                 let mut post = parse_metadata(path);
                 if post_can_be_parsed(&post.published) {
                     println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
-                    // Parse tags
-                    for tag in &post.tags {
-                        if post_can_be_published(&post.published) {
-                            let find_tag = format!("{}", tag);
-                            if !shared.tags.contains_key(&find_tag) {
-                                shared.tags.insert(format!("{}", tag), vec![]);
-                            }
-                            let mut tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
-                            tag_posts.push(
-                                Article {
-                                    title: format!("{}", &post.title),
-                                    url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
-                                }
-                            );
-                        }
-                    }
                     // Parse cover
                     post.markdown = custom_parser(&post.markdown, |src| src
                                                   .replace("<cover>", "<div class='cover' style='background-image: url(")
@@ -292,7 +322,7 @@ fn main() {
                     // Parse math
                     post.markdown = custom_parser(&post.markdown, |src| src.replace("<math>", "<pre class='math'>$$").replace("</math>", "$$</pre>"));
 
-                    let output_html = apply_template(&template, &post, "");
+                    let output_html = apply_template(&template, &post, "", Some(&shared));
                     let _save_result = save_as_html(&output_html, &post.output_file);
                     if post_can_be_published(&post.published) {
                         return Some(post);
