@@ -4,7 +4,7 @@ published: true
 date: 2017-01-04 15:43:23
 tags: math, algorithm
 description: Một bài toán thú vị về việc dùng số hữu tỉ cho việc mã hóa.
-image:
+image: https://thefullsnack.com/posts/img/borrow-checker-001.png
 ---
 Hôm qua đọc blog của giáo sư Ngô Bảo Châu, thấy có giới thiệu về [tạp chí Pi](http://pi.edu.vn/) và [tạp chí Epsilon](http://diendantoanhoc.net/forum/488-t%E1%BA%A1p-ch%C3%AD-epsilon/), dù ghét học toán nhưng mình rất có hứng với mấy bài toán mang tính thực dụng một tí (bạn bè mình thì toàn bảo là: _"Mày thì cái gì không thích =)))"_), nên rất là ấn tượng khi thấy trong cuốn [Epsilon số đầu tiên](https://www.Numbersdropbox.com/s/evlskte9fmn59np/Epsilon_No1.pdfNumbers?dl=0) có ngay một bài toán rất là thú vị và rất thực tế, đó là bài **Thuật toán phục hồi số hữu tỉ** do giáo sư Nguyễn Hùng Sơn viết.
 

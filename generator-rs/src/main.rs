@@ -104,6 +104,14 @@ fn generate_related_post(shared: Option<&Shared>, tags: &Vec<String>, current: S
     format!("<ul class='related-posts-list'>{}</ul>", (&output[..limit]).join(""))
 }
 
+fn generate_meta(post: &Metadata) -> String {
+    let img = match post.image.as_ref() {
+        "" => "https://thefullsnack.com/img/default.jpg",
+        _  => &post.image
+    };
+    format!("<meta property='og:image' content='{}'>", img)
+}
+
 fn apply_template(template: &str, post: &Metadata, tag_text: &str, related_posts: Option<&Shared>) -> String {
     //dotenv().ok();
     let mut options = ComrakOptions::default();
@@ -118,7 +126,7 @@ fn apply_template(template: &str, post: &Metadata, tag_text: &str, related_posts
         &template
         .replace("{%content%}", &parsed)
         .replace("{%title%}", &post.title)
-        .replace("{%meta%}", "") // TODO: generate metadata
+        .replace("{%meta%}", &generate_meta(&post))
         .replace("{%hash%}", "")
         .replace("{%tags%}", &generate_tags(tag_text, &post.tags))
         .replace("{%related%}", &generate_related_post(related_posts, &post.tags, (&post.title).to_string()))
