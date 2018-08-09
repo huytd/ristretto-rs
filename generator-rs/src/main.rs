@@ -3,6 +3,8 @@ extern crate regex;
 extern crate rss;
 extern crate time;
 extern crate dotenv;
+#[macro_use]
+extern crate rouille;
 
 use dotenv::dotenv;
 use std::env;
@@ -38,7 +40,8 @@ struct Metadata {
     image: String,
     tags: Vec<String>,
     markdown: String,
-    output_file: PathBuf
+    output_file: PathBuf,
+    output_html: String
 }
 
 fn post_can_be_parsed(status: &str) -> bool {
@@ -154,7 +157,8 @@ fn parse_metadata(path: &Path) -> Metadata {
         image: format!(""),
         tags: vec![],
         markdown: format!(""),
-        output_file: path.with_extension("html")
+        output_file: path.with_extension("html"),
+        output_html: format!("")
     };
 
     let mut line_count = 0;
@@ -207,7 +211,7 @@ fn generate_index_page(posts: &Vec<Metadata>) {
             format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}{}<br/><a href='/posts/{}'>{}</a></div>", post_date_text, guest_tag, tag_list, file_name, p.title)
         }).collect();
         let markdown = html.join("\n");
-        let post = Metadata {
+        let mut post = Metadata {
             title: "Index".to_string(),
             published: format!("true"),
             date: "".to_string(),
@@ -215,10 +219,11 @@ fn generate_index_page(posts: &Vec<Metadata>) {
             image: "".to_string(),
             tags: vec![],
             markdown: markdown,
-            output_file: PathBuf::from("./index.html")
+            output_file: PathBuf::from("./index.html"),
+            output_html: format!("")
         };
-        let output_html = apply_template(&template, &post, "", None);
-        let _ = save_as_html(&output_html, &PathBuf::from("./index.html"));
+        post.output_html = apply_template(&template, &post, "", None);
+        let _ = save_as_html(&post.output_html, &PathBuf::from("./index.html"));
     }
 }
 
@@ -238,7 +243,8 @@ fn generate_tags_page(tags: &HashMap<String, Vec<Article>>) {
                 image: "".to_string(),
                 tags: Vec::from(tags_except_key),
                 markdown: markdown,
-                output_file: PathBuf::from(&format!("./tags/{}.html", &key))
+                output_file: PathBuf::from(&format!("./tags/{}.html", &key)),
+                output_html: format!("")
             };
             let output_html = apply_template(&template, &post, "Other ", None);
             let _ = save_as_html(&output_html, &post.output_file);
@@ -277,82 +283,124 @@ fn generate_rss_feed(posts: &Vec<Metadata>) {
     output_file.write_all(channel.to_string().as_bytes());
 }
 
+fn parse_post(template: &str, shared: &Shared, path: &Path, force: bool) -> Option<Metadata> {
+    let emoji_regex: Regex = Regex::new(r#" :\b([a-z\-]+)\b:"#).unwrap();
+    let mut post = parse_metadata(path);
+    if post_can_be_parsed(&post.published) || force {
+        println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
+        // Parse cover
+        post.markdown = custom_parser(&post.markdown, |src| src
+                                      .replace("<cover>", "<div class='cover' style='background-image: url(")
+                                      .replace("</cover>", ")'></div><div class='cover-holder'></div>"));
+        // Parse Emoji
+        post.markdown = custom_parser(&post.markdown, |src| emoji_regex.replace_all(src, " <i class='em em-$1'></i>").into_owned());
+        // Parse math
+        post.markdown = custom_parser(&post.markdown, |src| src.replace("<math>", "<pre class='math'>$$").replace("</math>", "$$</pre>"));
+
+        let output_html = apply_template(&template, &post, "", Some(&shared));
+        post.output_html = output_html;
+        return Some(post);
+    }
+    None
+}
+
 fn main() {
     dotenv().ok();
 
     let args: Vec<String> = env::args().collect();
     let mut folder = ".";
     if args.len() > 1 {
-        folder = &args[1];
-    }
-    let emoji_regex: Regex = Regex::new(r#" :\b([a-z\-]+)\b:"#).unwrap();
+        let param = &args[1];
 
-    // TODO: Default template should come from config file as well
-    if let Ok(template) = load_template(folder) {
-        let mut shared = Shared { tags: HashMap::new() };
+        if (param != "preview") {
+            folder = param;
+            // Generator mode
 
-        let _ = for_each_extension("md", folder, &mut shared, move |shared, path| {
-            let mut post = parse_metadata(path);
-            if post_can_be_parsed(&post.published) {
-                println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
-                // Parse tags
-                for tag in &post.tags {
-                    if post_can_be_published(&post.published) {
-                        let find_tag = format!("{}", tag);
-                        if !shared.tags.contains_key(&find_tag) {
-                            shared.tags.insert(format!("{}", tag), vec![]);
-                        }
-                        let tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
-                        tag_posts.push(
-                            Article {
-                                title: format!("{}", &post.title),
-                                url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
+            // TODO: Default template should come from config file as well
+            if let Ok(template) = load_template(folder) {
+                let mut shared = Shared { tags: HashMap::new() };
+
+                let _ = for_each_extension("md", folder, &mut shared, move |shared, path| {
+                    let mut post = parse_metadata(path);
+                    if post_can_be_parsed(&post.published) {
+                        println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
+                        // Parse tags
+                        for tag in &post.tags {
+                            if post_can_be_published(&post.published) {
+                                let find_tag = format!("{}", tag);
+                                if !shared.tags.contains_key(&find_tag) {
+                                    shared.tags.insert(format!("{}", tag), vec![]);
+                                }
+                                let tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
+                                tag_posts.push(
+                                    Article {
+                                        title: format!("{}", &post.title),
+                                        url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
+                                    }
+                                );
                             }
-                        );
+                        }
                     }
-                }
+                    None
+                });
+
+
+                let mut posts =
+                    for_each_extension("md", folder, &mut shared, move |shared, path| {
+                        if let Some(post) = parse_post(&template, shared, path, false) {
+                            let _save_result = save_as_html(&post.output_html, &post.output_file);
+                            if post_can_be_published(&post.published) {
+                                return Some(post);
+                            } else {
+                                return None;
+                            }
+                        }
+                        None
+                    });
+
+                posts.sort_by(|a, b| {
+                    let ta = time::strptime(&a.date, TIME_FORMAT).unwrap();
+                    let tb = time::strptime(&b.date, TIME_FORMAT).unwrap();
+                    tb.cmp(&ta)
+                });
+
+                println!("Total {} posts", posts.len());
+                generate_index_page(&posts);
+
+                println!("Tags: {:?}", shared.tags);
+                generate_tags_page(&shared.tags);
+
+                generate_rss_feed(&posts);
             }
-            None
-        });
 
+        } else {
+            // Preview mode
+            println!("Preview server running at :3123");
 
-        let mut posts =
-            for_each_extension("md", folder, &mut shared, move |shared, path| {
-                let mut post = parse_metadata(path);
-                if post_can_be_parsed(&post.published) {
-                    println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
-                    // Parse cover
-                    post.markdown = custom_parser(&post.markdown, |src| src
-                                                  .replace("<cover>", "<div class='cover' style='background-image: url(")
-                                                  .replace("</cover>", ")'></div><div class='cover-holder'></div>"));
-                    // Parse Emoji
-                    post.markdown = custom_parser(&post.markdown, |src| emoji_regex.replace_all(src, " <i class='em em-$1'></i>").into_owned());
-                    // Parse math
-                    post.markdown = custom_parser(&post.markdown, |src| src.replace("<math>", "<pre class='math'>$$").replace("</math>", "$$</pre>"));
-
-                    let output_html = apply_template(&template, &post, "", Some(&shared));
-                    let _save_result = save_as_html(&output_html, &post.output_file);
-                    if post_can_be_published(&post.published) {
-                        return Some(post);
-                    } else {
-                        return None;
+            rouille::start_server("localhost:3123", move |request| {
+                {
+                    let response = rouille::match_assets(&request, ".");
+                    println!("MATCHING {:?}", response);
+                    if response.is_success() {
+                        return response;
                     }
                 }
-                None
+                router!(request,
+                    (GET) (/view/{file_name: String}) => {
+                        if let Ok(template) = load_template("preview") {
+                            let mut shared = Shared { tags: HashMap::new() };
+                            let path = PathBuf::from(format!("./posts/{}.md", file_name));
+                            let abs_path = fs::canonicalize(&path).unwrap();
+                            if let Some(post) = parse_post(&template, &shared, &PathBuf::from(abs_path), true) {
+                                return rouille::Response::html(post.output_html); 
+                            }
+                        }
+                        rouille::Response::empty_404()
+                    },
+
+                    _ => rouille::Response::empty_404()
+                )
             });
-
-        posts.sort_by(|a, b| {
-            let ta = time::strptime(&a.date, TIME_FORMAT).unwrap();
-            let tb = time::strptime(&b.date, TIME_FORMAT).unwrap();
-            tb.cmp(&ta)
-        });
-
-        println!("Total {} posts", posts.len());
-        generate_index_page(&posts);
-
-        println!("Tags: {:?}", shared.tags);
-        generate_tags_page(&shared.tags);
-
-        generate_rss_feed(&posts);
+        }
     }
 }
