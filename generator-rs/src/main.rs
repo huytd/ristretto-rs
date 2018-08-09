@@ -392,7 +392,8 @@ fn main() {
                             let path = PathBuf::from(format!("./posts/{}.md", file_name));
                             let abs_path = fs::canonicalize(&path).unwrap();
                             if let Some(post) = parse_post(&template, &shared, &PathBuf::from(abs_path), true) {
-                                return rouille::Response::html(post.output_html); 
+                                let output = post.output_html.replace("\"img", "\"/posts/img").to_string();
+                                return rouille::Response::html(output); 
                             }
                         }
                         rouille::Response::empty_404()
