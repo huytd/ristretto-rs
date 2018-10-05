@@ -5,6 +5,7 @@ extern crate time;
 extern crate dotenv;
 #[macro_use]
 extern crate rouille;
+extern crate chrono;
 
 use dotenv::dotenv;
 use std::env;
@@ -17,9 +18,9 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use regex::Regex;
 use rss::ChannelBuilder;
+use chrono::prelude::*;
 
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-const RFC2822_TIME_FORMAT: &str = "%a, %d %b %Y %H:%M:%S -0800";
 
 #[derive(Debug, Clone, PartialEq)]
 struct Article {
@@ -200,8 +201,8 @@ fn generate_index_page(posts: &Vec<Metadata>) {
     if let Ok(template) = load_template("index") {
         let html: Vec<String> = posts.into_iter().map(|p| {
             let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
-            let post_date = time::strptime(&p.date, TIME_FORMAT).unwrap();
-            let post_date_text = time::strftime(&date_format, &post_date).unwrap_or(format!(""));
+            let post_date = Utc.datetime_from_str(&p.date, TIME_FORMAT).unwrap();
+            let post_date_text = post_date.to_rfc2822();
             let tag_list = &p.tags.join(", ");
             let guest_tag = if p.published.eq("guest") {
                 "<span class='guest-post'>Guest Post</span>"
@@ -264,8 +265,9 @@ fn generate_rss_feed(posts: &Vec<Metadata>) {
     let mut items: Vec<rss::Item> = vec![];
     for post in posts {
         let file_name = post.output_file.file_name().unwrap().to_str().unwrap();
-        let post_date = time::strptime(&post.date, TIME_FORMAT).unwrap();
-        let post_date_text = time::strftime(RFC2822_TIME_FORMAT, &post_date).unwrap_or(format!(""));
+        let post_date = Utc.datetime_from_str(&post.date, TIME_FORMAT).unwrap();
+        let post_date_text = post_date.to_rfc2822();
+        println!("{:?}  {:?}  {:?}", post_date, post_date_text, &post.date);
         let mut item = rss::Item::default();
         let link = format!("{}/posts/{}", env::var("DOMAIN_NAME").unwrap(), file_name);
         let mut guid = rss::Guid::default();
@@ -359,8 +361,8 @@ fn main() {
                     });
 
                 posts.sort_by(|a, b| {
-                    let ta = time::strptime(&a.date, TIME_FORMAT).unwrap();
-                    let tb = time::strptime(&b.date, TIME_FORMAT).unwrap();
+                    let ta = Utc.datetime_from_str(&a.date, TIME_FORMAT).unwrap();
+                    let tb = Utc.datetime_from_str(&b.date, TIME_FORMAT).unwrap();
                     tb.cmp(&ta)
                 });
 
