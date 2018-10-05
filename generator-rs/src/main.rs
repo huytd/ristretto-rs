@@ -202,7 +202,7 @@ fn generate_index_page(posts: &Vec<Metadata>) {
         let html: Vec<String> = posts.into_iter().map(|p| {
             let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
             let post_date = Utc.datetime_from_str(&p.date, TIME_FORMAT).unwrap();
-            let post_date_text = post_date.to_rfc2822();
+            let post_date_text = post_date.format(&date_format);
             let tag_list = &p.tags.join(", ");
             let guest_tag = if p.published.eq("guest") {
                 "<span class='guest-post'>Guest Post</span>"
