@@ -19,7 +19,7 @@ use regex::Regex;
 use rss::ChannelBuilder;
 
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-const RFC2822_TIME_FORMAT: &str = "%a, %d %b %Y %T %z";
+const RFC2822_TIME_FORMAT: &str = "%a, %d %b %Y %H:%M:%S PST";
 
 #[derive(Debug, Clone, PartialEq)]
 struct Article {
