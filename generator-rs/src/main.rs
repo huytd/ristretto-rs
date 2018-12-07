@@ -109,8 +109,10 @@ fn generate_related_post(shared: Option<&Shared>, tags: &Vec<String>, current: S
 }
 
 fn generate_meta(post: &Metadata) -> String {
+    let domain_name = env::var("DOMAIN_NAME").unwrap();
+    let default_img = format!("{}/img/default.jpg", domain_name);
     let img = match post.image.as_ref() {
-        "" => "https://thefullsnack.com/img/default.jpg",
+        "" => &default_img[..],
         _  => &post.image
     };
     format!("<meta property='og:image' content='{}'>", img)
@@ -298,6 +300,8 @@ fn parse_post(template: &str, shared: &Shared, path: &Path, force: bool) -> Opti
         post.markdown = custom_parser(&post.markdown, |src| emoji_regex.replace_all(src, " <i class='em em-$1'></i>").into_owned());
         // Parse math
         post.markdown = custom_parser(&post.markdown, |src| src.replace("<math>", "<pre class='math'>$$").replace("</math>", "$$</pre>"));
+        // Parse video
+        post.markdown = custom_parser(&post.markdown, |src| src.replace("<animate>", "<video style='max-width: 800px; margin-left: -140px' autoplay loop><source type='video/mp4' src='").replace("</animate>", "'></source></video>"));
 
         let output_html = apply_template(&template, &post, "", Some(&shared));
         post.output_html = output_html;
