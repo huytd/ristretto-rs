@@ -33,6 +33,7 @@ struct Shared {
     tags: HashMap<String, Vec<Article>>
 }
 
+#[derive(Debug)]
 struct Metadata {
     title: String,
     published: String,
@@ -315,46 +316,25 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
     let mut folder = ".";
-    if args.len() > 1 {
-        let param = &args[1];
 
-        if (param != "preview") {
-            folder = param;
-            // Generator mode
+    // Preview mode
+    println!("Preview server running at :3123");
 
-            // TODO: Default template should come from config file as well
-            if let Ok(template) = load_template(folder) {
-                let mut shared = Shared { tags: HashMap::new() };
-
-                let _ = for_each_extension("md", folder, &mut shared, move |shared, path| {
-                    let mut post = parse_metadata(path);
-                    if post_can_be_parsed(&post.published) {
-                        println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
-                        // Parse tags
-                        for tag in &post.tags {
-                            if post_can_be_published(&post.published) {
-                                let find_tag = format!("{}", tag);
-                                if !shared.tags.contains_key(&find_tag) {
-                                    shared.tags.insert(format!("{}", tag), vec![]);
-                                }
-                                let tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
-                                tag_posts.push(
-                                    Article {
-                                        title: format!("{}", &post.title),
-                                        url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
-                                    }
-                                );
-                            }
-                        }
-                    }
-                    None
-                });
-
-
-                let mut posts =
-                    for_each_extension("md", folder, &mut shared, move |shared, path| {
+    rouille::start_server("localhost:3123", move |request| {
+        {
+            let response = rouille::match_assets(&request, ".");
+            println!("MATCHING {:?}", response);
+            if response.is_success() {
+                return response;
+            }
+        }
+        router!(request,
+            // home page
+            (GET) (/) => {
+                if let Ok(template) = load_template("index") {
+                    let mut shared = Shared { tags: HashMap::new() };
+                    let mut posts = for_each_extension("md", folder, &mut shared, move |shared, path| {
                         if let Some(post) = parse_post(&template, shared, path, false) {
-                            let _save_result = save_as_html(&post.output_html, &post.output_file);
                             if post_can_be_published(&post.published) {
                                 return Some(post);
                             } else {
@@ -364,50 +344,100 @@ fn main() {
                         None
                     });
 
-                posts.sort_by(|a, b| {
-                    let ta = Utc.datetime_from_str(&a.date, TIME_FORMAT).unwrap();
-                    let tb = Utc.datetime_from_str(&b.date, TIME_FORMAT).unwrap();
-                    tb.cmp(&ta)
-                });
+                    posts.sort_by(|a, b| {
+                        let ta = Utc.datetime_from_str(&a.date, TIME_FORMAT).unwrap();
+                        let tb = Utc.datetime_from_str(&b.date, TIME_FORMAT).unwrap();
+                        tb.cmp(&ta)
+                    });
 
-                println!("Total {} posts", posts.len());
-                generate_index_page(&posts);
-
-                println!("Tags: {:?}", shared.tags);
-                generate_tags_page(&shared.tags);
-
-                generate_rss_feed(&posts);
-            }
-
-        } else {
-            // Preview mode
-            println!("Preview server running at :3123");
-
-            rouille::start_server("localhost:3123", move |request| {
-                {
-                    let response = rouille::match_assets(&request, ".");
-                    println!("MATCHING {:?}", response);
-                    if response.is_success() {
-                        return response;
+                    println!("{:?}", posts);
+                }
+                rouille::Response::empty_404()
+            },
+            // content page
+            (GET) (/posts/{file_name: String}) => {
+                if let Ok(template) = load_template("preview") {
+                    let mut shared = Shared { tags: HashMap::new() };
+                    let path = PathBuf::from(format!("./posts/{}.md", file_name));
+                    let abs_path = fs::canonicalize(&path).unwrap();
+                    if let Some(post) = parse_post(&template, &shared, &PathBuf::from(abs_path), true) {
+                        let output = post.output_html.replace("\"img", "\"/posts/img").to_string();
+                        return rouille::Response::html(output);
                     }
                 }
-                router!(request,
-                    (GET) (/view/{file_name: String}) => {
-                        if let Ok(template) = load_template("preview") {
-                            let mut shared = Shared { tags: HashMap::new() };
-                            let path = PathBuf::from(format!("./posts/{}.md", file_name));
-                            let abs_path = fs::canonicalize(&path).unwrap();
-                            if let Some(post) = parse_post(&template, &shared, &PathBuf::from(abs_path), true) {
-                                let output = post.output_html.replace("\"img", "\"/posts/img").to_string();
-                                return rouille::Response::html(output); 
-                            }
-                        }
-                        rouille::Response::empty_404()
-                    },
+                rouille::Response::empty_404()
+            },
 
-                    _ => rouille::Response::empty_404()
-                )
-            });
-        }
-    }
+            _ => rouille::Response::empty_404()
+        )
+    });
+
+    // if args.len() > 1 {
+    //     let param = &args[1];
+
+    //     if (param != "preview") {
+    //         folder = param;
+    //         // Generator mode
+
+    //         // TODO: Default template should come from config file as well
+    //         if let Ok(template) = load_template(folder) {
+    //             let mut shared = Shared { tags: HashMap::new() };
+
+    //             let _ = for_each_extension("md", folder, &mut shared, move |shared, path| {
+    //                 let mut post = parse_metadata(path);
+    //                 if post_can_be_parsed(&post.published) {
+    //                     println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
+    //                     // Parse tags
+    //                     for tag in &post.tags {
+    //                         if post_can_be_published(&post.published) {
+    //                             let find_tag = format!("{}", tag);
+    //                             if !shared.tags.contains_key(&find_tag) {
+    //                                 shared.tags.insert(format!("{}", tag), vec![]);
+    //                             }
+    //                             let tag_posts = shared.tags.get_mut(&format!("{}", tag)).unwrap();
+    //                             tag_posts.push(
+    //                                 Article {
+    //                                     title: format!("{}", &post.title),
+    //                                     url: format!("{}", post.output_file.file_name().unwrap().to_str().unwrap())
+    //                                 }
+    //                             );
+    //                         }
+    //                     }
+    //                 }
+    //                 None
+    //             });
+
+
+    //             let mut posts =
+    //                 for_each_extension("md", folder, &mut shared, move |shared, path| {
+    //                     if let Some(post) = parse_post(&template, shared, path, false) {
+    //                         let _save_result = save_as_html(&post.output_html, &post.output_file);
+    //                         if post_can_be_published(&post.published) {
+    //                             return Some(post);
+    //                         } else {
+    //                             return None;
+    //                         }
+    //                     }
+    //                     None
+    //                 });
+
+    //             posts.sort_by(|a, b| {
+    //                 let ta = Utc.datetime_from_str(&a.date, TIME_FORMAT).unwrap();
+    //                 let tb = Utc.datetime_from_str(&b.date, TIME_FORMAT).unwrap();
+    //                 tb.cmp(&ta)
+    //             });
+
+    //             println!("Total {} posts", posts.len());
+    //             generate_index_page(&posts);
+
+    //             println!("Tags: {:?}", shared.tags);
+    //             generate_tags_page(&shared.tags);
+
+    //             generate_rss_feed(&posts);
+    //         }
+
+    //     } else {
+
+    //     }
+    // }
 }
