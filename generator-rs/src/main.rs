@@ -16,11 +16,43 @@ use std::io::{BufRead, BufReader};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use regex::Regex;
 use rss::ChannelBuilder;
 use chrono::prelude::*;
 
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
+
+#[derive(Debug, Clone)]
+struct Cache<T> {
+    last_cached: std::time::SystemTime,
+    time_to_live: std::time::Duration,
+    data: T
+}
+
+impl<T: Clone> Cache<T> {
+    fn new(content: T, ttl: std::time::Duration) -> Cache<T> {
+        Cache {
+            last_cached: std::time::SystemTime::now(),
+            time_to_live: ttl,
+            data: content
+        }
+    }
+
+    fn is_expired(&self) -> bool {
+        self.last_cached.elapsed().unwrap() >= self.time_to_live
+    }
+
+    fn update(&mut self, updated_content: T) {
+        println!("Cache expired. Updated at {:?}", std::time::SystemTime::now());
+        self.last_cached = std::time::SystemTime::now();
+        self.data = updated_content;
+    }
+
+    fn read(&self) -> T {
+        self.data.clone()
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 struct Article {
@@ -33,7 +65,7 @@ struct Shared {
     tags: HashMap<String, Vec<Article>>
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Metadata {
     title: String,
     published: String,
@@ -195,7 +227,7 @@ fn parse_post(template: &str, shared: &Shared, path: &Path, force: bool) -> Opti
     let emoji_regex: Regex = Regex::new(r#" :\b([a-z\-]+)\b:"#).unwrap();
     let mut post = parse_metadata(path);
     if post_can_be_parsed(&post.published) || force {
-        println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
+        //println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
         // Parse cover
         post.markdown = custom_parser(&post.markdown, |src| src
                                       .replace("<cover>", "<div class='cover' style='background-image: url(")
@@ -217,9 +249,9 @@ fn parse_post(template: &str, shared: &Shared, path: &Path, force: bool) -> Opti
 fn get_posts() -> Vec<Metadata> {
     let mut shared = Shared { tags: HashMap::new() };
     let mut posts = for_each_extension("md", "./posts", &mut shared, move |shared, path| {
-        println!(">>>> {}", &path.display());
+        //println!(">>>> {}", &path.display());
         if let Some(post) = parse_post("", shared, path, false) {
-            println!("Can be pulbisehd {} {}", &post.title, &post.published);
+            //println!("Can be pulbisehd {} {}", &post.title, &post.published);
             if post_can_be_published(&post.published) {
                 return Some(post);
             } else {
@@ -238,9 +270,22 @@ fn get_posts() -> Vec<Metadata> {
     posts
 }
 
-fn response_index() -> rouille::Response {
+fn response_index(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
     if let Ok(template) = load_template("index") {
-        let posts = get_posts();
+        let mut need_update = false;
+        {
+            let cached = cache.read().unwrap();
+            if cached.is_expired() {
+                need_update = true;
+            }
+        }
+        if need_update {
+            let mut writer = cache.write().unwrap();
+            writer.update(get_posts());
+        }
+
+        let posts = { cache.read().unwrap().read() };
+
         let date_format = env::var("DATE_FORMAT").unwrap();
         let html: Vec<String> = posts.into_iter().map(|p| {
         let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
@@ -286,8 +331,20 @@ fn response_view(file_name: String) -> rouille::Response {
     rouille::Response::empty_404()
 }
 
-fn response_rss() -> rouille::Response {
-    let posts = get_posts();
+fn response_rss(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
+    let mut need_update = false;
+    {
+        let cached = cache.read().unwrap();
+        if cached.is_expired() {
+            need_update = true;
+        }
+    }
+    if need_update {
+        let mut writer = cache.write().unwrap();
+        writer.update(get_posts());
+    }
+
+    let posts = { cache.read().unwrap().read() };
 
     let mut channel = ChannelBuilder::default()
         .title(env::var("RSS_TITLE").unwrap())
@@ -315,15 +372,18 @@ fn response_rss() -> rouille::Response {
     }
     channel.set_items(items);
 
-    rouille::Response::from_data("application/rss+xml", channel.to_string())
+    return rouille::Response::from_data("application/rss+xml", channel.to_string());
 }
 
 fn main() {
     dotenv().ok();
+    let cached_posts = Cache::new(get_posts(), std::time::Duration::from_secs(1800)); // cached for 30 min = 1800
+    let shared_cache = Arc::new(RwLock::new(cached_posts));
 
     // Preview mode
     let address = format!("0.0.0.0:{}", env::var("PORT").unwrap_or("3123".to_string()));
     println!("Preview server running at {}", address);
+
 
     rouille::start_server(&address, move |request| {
         {
@@ -336,7 +396,7 @@ fn main() {
         router!(request,
             // home page
             (GET) (/) => {
-                response_index()
+                response_index(shared_cache.clone())
             },
             // content page
             (GET) (/posts/{file_name: String}) => {
@@ -344,7 +404,7 @@ fn main() {
             },
             // rss feed
             (GET) (/rss) => {
-                response_rss()
+                response_rss(shared_cache.clone())
             },
 
             _ => rouille::Response::empty_404()
