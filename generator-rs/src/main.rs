@@ -49,7 +49,7 @@ impl<T: Clone> Cache<T> {
         self.data = updated_content;
     }
 
-    fn read(&self) -> T {
+    fn get(&self) -> T {
         self.data.clone()
     }
 }
@@ -270,81 +270,92 @@ fn get_posts() -> Vec<Metadata> {
     posts
 }
 
-fn response_index(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
-    if let Ok(template) = load_template("index") {
-        let mut need_update = false;
-        {
-            let cached = cache.read().unwrap();
+fn response_index(cache: Arc<RwLock<Cache<Vec<Metadata>>>>, template: &str) -> rouille::Response {
+    let has_posts: Option<Vec<Metadata>> = {
+        if let Some(cached) = cache.read().ok() {
             if cached.is_expired() {
-                need_update = true;
-            }
-        }
-        if need_update {
-            let mut writer = cache.write().unwrap();
-            writer.update(get_posts());
-        }
-
-        let posts = { cache.read().unwrap().read() };
-
-        let date_format = env::var("DATE_FORMAT").unwrap();
-        let html: Vec<String> = posts.into_iter().map(|p| {
-        let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
-        let post_date = Utc.datetime_from_str(&p.date, TIME_FORMAT).unwrap();
-        let post_date_text = post_date.format(&date_format);
-        let tag_list = &p.tags.join(", ");
-        let guest_tag = if p.published.eq("guest") {
-                "<span class='guest-post'>Guest Post</span>"
+                None
             } else {
-                ""
-            };
-            format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}{}<br/><a href='/posts/{}'>{}</a></div>", post_date_text, guest_tag, tag_list, file_name, p.title)
-        }).collect();
-        let markdown = html.join("\n");
-        let mut post = Metadata {
-            title: "Index".to_string(),
-            published: format!("true"),
-            date: "".to_string(),
-            description: "".to_string(),
-            image: "".to_string(),
-            tags: vec![],
-            markdown: markdown,
-            output_file: PathBuf::from("./index.html"),
-            output_html: format!("")
+                Some(cached.get())
+            }
+        } else {
+            None
+        }
+    };
+    let posts = if let Some(post) = has_posts {
+        post
+    } else {
+        if let Some(mut writer) = cache.write().ok() {
+            writer.update(get_posts());
+            writer.get()
+        } else {
+            vec![]
+        }
+    };
+
+    let date_format = env::var("DATE_FORMAT").unwrap();
+    let html: Vec<String> = posts.into_iter().map(|p| {
+    let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
+    let post_date = Utc.datetime_from_str(&p.date, TIME_FORMAT).unwrap();
+    let post_date_text = post_date.format(&date_format);
+    let tag_list = &p.tags.join(", ");
+    let guest_tag = if p.published.eq("guest") {
+            "<span class='guest-post'>Guest Post</span>"
+        } else {
+            ""
         };
-        post.output_html = apply_template(&template, &post, "", None);
-        return rouille::Response::html(post.output_html);
-    }
-    rouille::Response::empty_404()
+        format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}{}<br/><a href='/posts/{}'>{}</a></div>", post_date_text, guest_tag, tag_list, file_name, p.title)
+    }).collect();
+    let markdown = html.join("\n");
+    let mut post = Metadata {
+        title: "Index".to_string(),
+        published: format!("true"),
+        date: "".to_string(),
+        description: "".to_string(),
+        image: "".to_string(),
+        tags: vec![],
+        markdown: markdown,
+        output_file: PathBuf::from("./index.html"),
+        output_html: format!("")
+    };
+    post.output_html = apply_template(&template, &post, "", None);
+    return rouille::Response::html(post.output_html);
 }
 
-fn response_view(file_name: String) -> rouille::Response {
-    if let Ok(template) = load_template("posts") {
-        let shared = Shared { tags: HashMap::new() };
-        let file_name_without_ext = file_name.replace(".html", "");
-        let path = PathBuf::from(format!("./posts/{}.md", file_name_without_ext));
-        let abs_path = fs::canonicalize(&path).unwrap();
-        if let Some(post) = parse_post(&template, &shared, &PathBuf::from(abs_path), true) {
-            let output = post.output_html.replace("\"img", "\"/posts/img").to_string();
-            return rouille::Response::html(output);
-        }
+fn response_view(file_name: String, template: &str) -> rouille::Response {
+    let shared = Shared { tags: HashMap::new() };
+    let file_name_without_ext = file_name.replace(".html", "");
+    let path = PathBuf::from(format!("./posts/{}.md", file_name_without_ext));
+    let abs_path = fs::canonicalize(&path).unwrap();
+    if let Some(post) = parse_post(&template, &shared, &PathBuf::from(abs_path), true) {
+        let output = post.output_html.replace("\"img", "\"/posts/img").to_string();
+        return rouille::Response::html(output);
     }
     rouille::Response::empty_404()
 }
 
 fn response_rss(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
-    let mut need_update = false;
-    {
-        let cached = cache.read().unwrap();
-        if cached.is_expired() {
-            need_update = true;
+    let has_posts: Option<Vec<Metadata>> = {
+        if let Some(cached) = cache.read().ok() {
+            if cached.is_expired() {
+                None
+            } else {
+                Some(cached.get())
+            }
+        } else {
+            None
         }
-    }
-    if need_update {
-        let mut writer = cache.write().unwrap();
-        writer.update(get_posts());
-    }
-
-    let posts = { cache.read().unwrap().read() };
+    };
+    let posts = if let Some(post) = has_posts {
+        post
+    } else {
+        if let Some(mut writer) = cache.write().ok() {
+            writer.update(get_posts());
+            writer.get()
+        } else {
+            vec![]
+        }
+    };
 
     let mut channel = ChannelBuilder::default()
         .title(env::var("RSS_TITLE").unwrap())
@@ -380,15 +391,17 @@ fn main() {
     let cached_posts = Cache::new(get_posts(), std::time::Duration::from_secs(1800)); // cached for 30 min = 1800
     let shared_cache = Arc::new(RwLock::new(cached_posts));
 
+    let index_template = load_template("index").unwrap_or("No template found for /index".to_string());
+    let post_template = load_template("posts").unwrap_or("No template found for /posts".to_string());
+
     // Preview mode
     let address = format!("0.0.0.0:{}", env::var("PORT").unwrap_or("3123".to_string()));
     println!("Preview server running at {}", address);
 
-
     rouille::start_server(&address, move |request| {
         {
             let response = rouille::match_assets(&request, ".");
-            println!("MATCHING {:?}", response);
+            // println!("MATCHING {:?}", response);
             if response.is_success() {
                 return response;
             }
@@ -396,11 +409,11 @@ fn main() {
         router!(request,
             // home page
             (GET) (/) => {
-                response_index(shared_cache.clone())
+                response_index(shared_cache.clone(), index_template.as_str())
             },
             // content page
             (GET) (/posts/{file_name: String}) => {
-                response_view(file_name)
+                response_view(file_name, post_template.as_str())
             },
             // rss feed
             (GET) (/rss) => {
