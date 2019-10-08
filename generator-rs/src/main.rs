@@ -295,11 +295,11 @@ fn response_index(cache: Arc<RwLock<Cache<Vec<Metadata>>>>, template: &str) -> r
 
     let date_format = env::var("DATE_FORMAT").unwrap();
     let html: Vec<String> = posts.into_iter().map(|p| {
-    let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
-    let post_date = Utc.datetime_from_str(&p.date, TIME_FORMAT).unwrap();
-    let post_date_text = post_date.format(&date_format);
-    let tag_list = &p.tags.join(", ");
-    let guest_tag = if p.published.eq("guest") {
+        let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
+        let post_date = Utc.datetime_from_str(&p.date, TIME_FORMAT).unwrap();
+        let post_date_text = post_date.format(&date_format);
+        let tag_list = &p.tags.join(", ");
+        let guest_tag = if p.published.eq("guest") {
             "<span class='guest-post'>Guest Post</span>"
         } else {
             ""
@@ -332,6 +332,60 @@ fn response_view(file_name: String, template: &str) -> rouille::Response {
         return rouille::Response::html(output);
     }
     rouille::Response::empty_404()
+}
+
+fn response_tag(cache: Arc<RwLock<Cache<Vec<Metadata>>>>, tag_name: String, template: &str) -> rouille::Response {
+    let has_posts: Option<Vec<Metadata>> = {
+        if let Some(cached) = cache.read().ok() {
+            if cached.is_expired() {
+                None
+            } else {
+                Some(cached.get())
+            }
+        } else {
+            None
+        }
+    };
+    let posts = if let Some(post) = has_posts {
+        post
+    } else {
+        if let Some(mut writer) = cache.write().ok() {
+            writer.update(get_posts());
+            writer.get()
+        } else {
+            vec![]
+        }
+    };
+    let tag = tag_name.replace(".html", "");
+    let posts: Vec<Metadata> = posts.into_iter().filter(|p| p.tags.contains(&tag)).collect();
+
+    let date_format = env::var("DATE_FORMAT").unwrap();
+    let html: Vec<String> = posts.into_iter().map(|p| {
+        let file_name = p.output_file.file_name().unwrap().to_str().unwrap();
+        let post_date = Utc.datetime_from_str(&p.date, TIME_FORMAT).unwrap();
+        let post_date_text = post_date.format(&date_format);
+        let tag_list = &p.tags.join(", ");
+        let guest_tag = if p.published.eq("guest") {
+            "<span class='guest-post'>Guest Post</span>"
+        } else {
+            ""
+        };
+        format!("<div class='home-list-item'><span class='home-date-indicator'>{}</span>{}{}<br/><a href='/posts/{}'>{}</a></div>", post_date_text, guest_tag, tag_list, file_name, p.title)
+    }).collect();
+    let markdown = html.join("\n");
+    let mut post = Metadata {
+        title: "Index".to_string(),
+        published: format!("true"),
+        date: "".to_string(),
+        description: "".to_string(),
+        image: "".to_string(),
+        tags: vec![],
+        markdown: markdown,
+        output_file: PathBuf::from("./tags.html"),
+        output_html: format!("")
+    };
+    post.output_html = apply_template(&template, &post, "", None);
+    return rouille::Response::html(post.output_html);
 }
 
 fn response_rss(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
@@ -393,6 +447,7 @@ fn main() {
 
     let index_template = load_template("index").unwrap_or("No template found for /index".to_string());
     let post_template = load_template("posts").unwrap_or("No template found for /posts".to_string());
+    let tag_template = load_template("tags").unwrap_or("No template found for /tags".to_string());
 
     // Preview mode
     let address = format!("0.0.0.0:{}", env::var("PORT").unwrap_or("3123".to_string()));
@@ -414,6 +469,10 @@ fn main() {
             // content page
             (GET) (/posts/{file_name: String}) => {
                 response_view(file_name, post_template.as_str())
+            },
+            // tag page
+            (GET) (/tags/{tag_name: String}) => {
+                response_tag(shared_cache.clone(), tag_name, tag_template.as_str())
             },
             // rss feed
             (GET) (/rss) => {
