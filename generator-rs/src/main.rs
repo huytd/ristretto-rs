@@ -224,7 +224,7 @@ fn parse_metadata(path: &Path) -> Metadata {
 }
 
 fn parse_post(template: &str, shared: &Shared, path: &Path, force: bool) -> Option<Metadata> {
-    let emoji_regex: Regex = Regex::new(r#" :\b([a-z\-]+)\b:"#).unwrap();
+    let emoji_regex: Regex = Regex::new(r#" :\b([a-z\-_]+)\b:"#).unwrap();
     let mut post = parse_metadata(path);
     if post_can_be_parsed(&post.published) || force {
         //println!("Title: {}\nTags: {:?}\nFile: {:?}\n", post.title, post.tags, post.output_file.file_name());
