@@ -246,11 +246,12 @@ fn parse_post(template: &str, shared: &Shared, path: &Path, force: bool) -> Opti
     None
 }
 
-fn get_posts() -> Vec<Metadata> {
+fn get_posts(gen_content: bool) -> Vec<Metadata> {
     let mut shared = Shared { tags: HashMap::new() };
     let mut posts = for_each_extension("md", "./posts", &mut shared, move |shared, path| {
         //println!(">>>> {}", &path.display());
-        if let Some(post) = parse_post("", shared, path, false) {
+        let template= if gen_content { "{%title%}\n{%content%}" } else { "" };
+        if let Some(post) = parse_post(template, shared, path, false) {
             //println!("Can be pulbisehd {} {}", &post.title, &post.published);
             if post_can_be_published(&post.published) {
                 return Some(post);
@@ -286,7 +287,7 @@ fn response_index(cache: Arc<RwLock<Cache<Vec<Metadata>>>>, template: &str) -> r
         post
     } else {
         if let Some(mut writer) = cache.write().ok() {
-            writer.update(get_posts());
+            writer.update(get_posts(false));
             writer.get()
         } else {
             vec![]
@@ -350,7 +351,7 @@ fn response_tag(cache: Arc<RwLock<Cache<Vec<Metadata>>>>, tag_name: String, temp
         post
     } else {
         if let Some(mut writer) = cache.write().ok() {
-            writer.update(get_posts());
+            writer.update(get_posts(false));
             writer.get()
         } else {
             vec![]
@@ -389,28 +390,7 @@ fn response_tag(cache: Arc<RwLock<Cache<Vec<Metadata>>>>, tag_name: String, temp
 }
 
 fn response_rss(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
-    let has_posts: Option<Vec<Metadata>> = {
-        if let Some(cached) = cache.read().ok() {
-            if cached.is_expired() {
-                None
-            } else {
-                Some(cached.get())
-            }
-        } else {
-            None
-        }
-    };
-    let posts = if let Some(post) = has_posts {
-        post
-    } else {
-        if let Some(mut writer) = cache.write().ok() {
-            writer.update(get_posts());
-            writer.get()
-        } else {
-            vec![]
-        }
-    };
-
+    let posts = get_posts(true);
     let mut channel = ChannelBuilder::default()
         .title(env::var("RSS_TITLE").unwrap())
         .link(env::var("DOMAIN_NAME").unwrap())
@@ -420,6 +400,7 @@ fn response_rss(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
 
     let mut items: Vec<rss::Item> = vec![];
     for post in posts {
+        println!("{:?}", post);
         let file_name = post.output_file.file_name().unwrap().to_str().unwrap();
         let post_date = Utc.datetime_from_str(&post.date, TIME_FORMAT).unwrap();
         let post_date_text = post_date.to_rfc2822();
@@ -431,7 +412,7 @@ fn response_rss(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
         item.set_title(format!("{}", &post.title));
         item.set_guid(guid);
         item.set_link(link.clone());
-        item.set_description(format!("{:?}", &post.description));
+        item.set_description(format!("{:?}", &post.output_html));
         item.set_pub_date(post_date_text);
         items.push(item);
     }
@@ -442,7 +423,7 @@ fn response_rss(cache: Arc<RwLock<Cache<Vec<Metadata>>>>) -> rouille::Response {
 
 fn main() {
     dotenv().ok();
-    let cached_posts = Cache::new(get_posts(), std::time::Duration::from_secs(1800)); // cached for 30 min = 1800
+    let cached_posts = Cache::new(get_posts(false), std::time::Duration::from_secs(1800)); // cached for 30 min = 1800
     let shared_cache = Arc::new(RwLock::new(cached_posts));
 
     let index_template = load_template("index").unwrap_or("No template found for /index".to_string());
