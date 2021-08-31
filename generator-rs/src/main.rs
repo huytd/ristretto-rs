@@ -449,6 +449,8 @@ fn main() {
     let post_template = load_template("posts").unwrap_or("No template found for /posts".to_string());
     let tag_template = load_template("tags").unwrap_or("No template found for /tags".to_string());
 
+    let is_production = env::var("PRODUCTION").unwrap_or("true".to_string()).eq("true");
+
     // Preview mode
     let address = format!("0.0.0.0:{}", env::var("PORT").unwrap_or("3123".to_string()));
     println!("Preview server running at {}", address);
@@ -468,7 +470,11 @@ fn main() {
             },
             // content page
             (GET) (/posts/{file_name: String}) => {
-                response_view(file_name, post_template.as_str())
+                if !is_production {
+                    response_view(file_name, load_template("posts").unwrap_or("No template found for /posts".to_string()).as_str())
+                } else {
+                    response_view(file_name, post_template.as_str())
+                }
             },
             // tag page
             (GET) (/tags/{tag_name: String}) => {
